@@ -1,7 +1,9 @@
 import argparse
 import time
+from pathlib import Path
 
 import cv2
+from ultralytics import YOLO
 
 
 def parse_args() -> argparse.Namespace:
@@ -12,6 +14,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--width", type=int, default=640, help="Capture width")
     parser.add_argument("--height", type=int, default=480, help="Capture height")
     parser.add_argument("--window-name", type=str, default="USB Camera 480p", help="Preview window title")
+    parser.add_argument(
+        "--model-path",
+        type=Path,
+        default=Path(__file__).resolve().parent / "best.pt",
+        help="Path to YOLO model (.pt)",
+    )
+    parser.add_argument("--conf", type=float, default=0.25, help="YOLO confidence threshold")
     return parser.parse_args()
 
 
@@ -53,15 +62,24 @@ def draw_fps(frame, fps: float) -> None:
     cv2.putText(frame, text, (x, y), font, scale, (0, 255, 0), thickness, cv2.LINE_AA)
 
 
+def load_model(model_path: Path) -> YOLO:
+    if not model_path.exists():
+        raise FileNotFoundError(f"Model not found: {model_path}")
 
-def process_frame(frame):
-    # Future hook: run YOLO inference here and draw detections before display.
-    return frame
+    print(f"Loading model from: {model_path}")
+    return YOLO(str(model_path))
+
+
+
+def process_frame(frame, model: YOLO, conf: float):
+    results = model.predict(frame, conf=conf, verbose=False)
+    return results[0].plot()
 
 
 
 def main() -> None:
     args = parse_args()
+    model = load_model(args.model_path)
 
     cap = open_camera(args.camera_index, args.width, args.height)
 
@@ -75,7 +93,7 @@ def main() -> None:
                 print("Frame read failed, exiting loop.")
                 break
 
-            frame = process_frame(frame)
+            frame = process_frame(frame, model, args.conf)
 
             now = time.perf_counter()
             dt = now - prev_time
