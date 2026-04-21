@@ -17,10 +17,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model-path",
         type=Path,
-        default=Path(__file__).resolve().parent / "best.pt",
-        help="Path to YOLO model (.pt)",
+        default=Path(__file__).resolve().parent / "best.onnx",
+        help="Path to YOLO model (.pt or .onnx)",
     )
     parser.add_argument("--conf", type=float, default=0.25, help="YOLO confidence threshold")
+    parser.add_argument("--device", type=str, default="cpu", help="Inference device: cpu or cuda:0")
     return parser.parse_args()
 
 
@@ -67,12 +68,12 @@ def load_model(model_path: Path) -> YOLO:
         raise FileNotFoundError(f"Model not found: {model_path}")
 
     print(f"Loading model from: {model_path}")
-    return YOLO(str(model_path))
+    return YOLO(str(model_path), task="detect")
 
 
 
-def process_frame(frame, model: YOLO, conf: float):
-    results = model.predict(frame, conf=conf, verbose=False)
+def process_frame(frame, model: YOLO, conf: float, device: str):
+    results = model.predict(frame, conf=conf, device=device, verbose=False)
     return results[0].plot()
 
 
@@ -93,7 +94,7 @@ def main() -> None:
                 print("Frame read failed, exiting loop.")
                 break
 
-            frame = process_frame(frame, model, args.conf)
+            frame = process_frame(frame, model, args.conf, args.device)
 
             now = time.perf_counter()
             dt = now - prev_time
