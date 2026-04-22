@@ -17,8 +17,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model-path",
         type=Path,
-        default=Path(__file__).resolve().parent / "best.onnx",
-        help="Path to YOLO model (.pt or .onnx)",
+        default=Path(__file__).resolve().parent / "best_int8_openvino_model",
+        help="Path to OpenVINO INT8 model directory or its .xml file",
     )
     parser.add_argument("--conf", type=float, default=0.25, help="YOLO confidence threshold")
     parser.add_argument("--device", type=str, default="cpu", help="Inference device: cpu or cuda:0")
@@ -64,8 +64,18 @@ def draw_fps(frame, fps: float) -> None:
 
 
 def load_model(model_path: Path) -> YOLO:
+    # Ultralytics OpenVINO backend is more stable when given the exported directory.
+    if model_path.suffix.lower() == ".xml" and model_path.parent.name.endswith("_openvino_model"):
+        model_path = model_path.parent
+
     if not model_path.exists():
-        raise FileNotFoundError(f"Model not found: {model_path}")
+        raise FileNotFoundError(f"OpenVINO model not found: {model_path}")
+
+    # Enforce OpenVINO-only model loading in this script.
+    if model_path.suffix.lower() not in {"", ".xml"}:
+        raise ValueError(
+            f"Only OpenVINO model directory or .xml is allowed, got: {model_path}"
+        )
 
     print(f"Loading model from: {model_path}")
     return YOLO(str(model_path), task="detect")
@@ -73,8 +83,10 @@ def load_model(model_path: Path) -> YOLO:
 
 
 def process_frame(frame, model: YOLO, conf: float, device: str):
+    infer_start = time.perf_counter()
     results = model.predict(frame, conf=conf, device=device, verbose=False)
-    return results[0].plot()
+    infer_ms = (time.perf_counter() - infer_start) * 1000.0
+    return results[0], infer_ms
 
 
 
@@ -86,6 +98,7 @@ def main() -> None:
 
     prev_time = time.perf_counter()
     smoothed_fps = 0.0
+    smoothed_infer_fps = 0.0
 
     try:
         while True:
@@ -94,24 +107,39 @@ def main() -> None:
                 print("Frame read failed, exiting loop.")
                 break
 
-            frame = process_frame(frame, model, args.conf, args.device)
+            result, infer_ms = process_frame(frame, model, args.conf, args.device)
 
             now = time.perf_counter()
             dt = now - prev_time
             prev_time = now
 
             instant_fps = 1.0 / dt if dt > 0 else 0.0
+            infer_fps = 1000.0 / infer_ms if infer_ms > 0 else 0.0
             if smoothed_fps == 0.0:
                 smoothed_fps = instant_fps
             else:
                 smoothed_fps = 0.9 * smoothed_fps + 0.1 * instant_fps
 
-            draw_fps(frame, smoothed_fps)
-            cv2.imshow(args.window_name, frame)
+            if smoothed_infer_fps == 0.0:
+                smoothed_infer_fps = infer_fps
+            else:
+                smoothed_infer_fps = 0.9 * smoothed_infer_fps + 0.1 * infer_fps
 
-            key = cv2.waitKey(1) & 0xFF
-            if key in (ord("q"), 27):
-                break
+            num_det = len(result.boxes) if result.boxes is not None else 0
+            print(
+                f"\rDet: {num_det:2d} | Infer: {infer_ms:7.1f} ms ({smoothed_infer_fps:5.2f} FPS) | Real-time: {smoothed_fps:5.2f} FPS",
+                end="",
+                flush=True,
+            )
+
+            # draw_fps(frame, smoothed_fps)
+            # cv2.imshow(args.window_name, frame)
+
+            # key = cv2.waitKey(1) & 0xFF
+            # if key in (ord("q"), 27):
+            #     break
+    except KeyboardInterrupt:
+        print("\nKeyboardInterrupt received, exiting.")
     finally:
         cap.release()
         cv2.destroyAllWindows()

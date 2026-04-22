@@ -1,3 +1,14 @@
 __pycache__/
 *.pyc
 .venv/
+
+# Do not upload dataset and training assets
+yolov8/
+data.yaml
+
+# Do not upload model conversion helper files or generated artifacts
+src/model_export.py
+src/quantize_onnx_int8.py
+src/exports/
+src/*.onnx
+src/*_openvino_model/
