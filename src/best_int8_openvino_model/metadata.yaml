@@ -1,0 +1,30 @@
+description: Ultralytics best model trained on data.yaml
+author: Ultralytics
+date: '2026-04-22T12:00:37.966931'
+version: 8.3.185
+license: AGPL-3.0 License (https://ultralytics.com/license)
+docs: https://docs.ultralytics.com
+stride: 32
+task: detect
+batch: 1
+imgsz:
+- 320
+- 320
+names:
+  0: yellow_ball
+  1: blue_ball
+  2: red_ball
+  3: black_ball
+  4: blue_placement_zone
+  5: red_placement_zone
+  6: blue_starting_zone
+  7: red_starting_zone
+  8: center_point
+args:
+  batch: 1
+  fraction: 1.0
+  half: false
+  int8: true
+  dynamic: false
+  nms: false
+channels: 3

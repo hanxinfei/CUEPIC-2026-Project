@@ -12,3 +12,5 @@ src/quantize_onnx_int8.py
 src/exports/
 src/*.onnx
 src/*_openvino_model/
+!src/best_int8_openvino_model/
+!src/best_int8_openvino_model/**
